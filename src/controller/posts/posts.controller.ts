@@ -229,6 +229,108 @@ export class PostController {
             });
         }
     };
+
+    
+    //mengupdate post — TIDAK berubah (input tetap angka)
+    updatePost = async (req: Request, res: Response) => {
+        try {
+            const validatedParams =
+                updatePostParamsSchema.parse(req.params);
+
+            const { id } = validatedParams;
+
+            const validateData = updatePostSchema.parse(req.body);
+
+            const { title, description, categoriesId } = validateData;
+
+            const [existingPost] = await db
+                .select()
+                .from(postsTable)
+                .where(eq(postsTable.id, id));
+
+            if (!existingPost) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Post not found",
+                });
+            }
+
+            let imageUrl = existingPost.imageUrl;
+            let imagePublicId = existingPost.imagePublicId;
+
+            if (req.file) {
+                const uploadResult = await uploadToCloudinary(
+                    req.file.buffer
+                );
+
+                imageUrl = uploadResult.secure_url;
+                imagePublicId = uploadResult.public_id;
+
+                if (existingPost.imagePublicId) {
+                    await deteleFromCloudinary(
+                        existingPost.imagePublicId
+                    );
+                }
+            }
+
+            await db
+                .update(postsTable)
+                .set({
+                    ...(title !== undefined && {
+                        title,
+                    }),
+                    ...(description !== undefined && {
+                        description,
+                    }),
+                    ...(categoriesId !== undefined && {
+                        categoriesId,
+                    }),
+                    ...(req.file && {
+                        imageUrl,
+                        imagePublicId,
+                    }),
+                })
+                .where(eq(postsTable.id, id));
+
+            // Ambil hasil update, sekalian join nama kategori
+            const [updatedPost] = await db
+                .select({
+                    id: postsTable.id,
+                    categoriesId: categoriesTable.name,
+                    authorId: postsTable.authorId,
+                    title: postsTable.title,
+                    imageUrl: postsTable.imageUrl,
+                    imagePublicId: postsTable.imagePublicId,
+                    description: postsTable.description,
+                    status: postsTable.status,
+                    deletedAt: postsTable.deletedAt,
+                    updatedAt: postsTable.updatedAt,
+                    createdAt: postsTable.createdAt,
+                })
+                .from(postsTable)
+                .leftJoin(categoriesTable, eq(postsTable.categoriesId, categoriesTable.id))
+                .where(eq(postsTable.id, id));
+
+            return res.status(200).json({
+                success: true,
+                message: "Post updated successfully",
+                data: {
+                    post: updatedPost,
+                },
+            });
+        } catch (error) {
+            console.log("Update post error:", error);
+
+            return res.status(500).json({
+                success: false,
+                message: "Internal server error",
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : error,
+            });
+        }
+    };
 }
 
 export default new PostController();
