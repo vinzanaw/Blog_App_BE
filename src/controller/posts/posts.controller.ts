@@ -80,6 +80,7 @@ export class PostController {
             });
         }
     };
+    
 
     //melihat semua post yang sudah ada
     getPosts = async (req: Request, res: Response) => {
@@ -108,6 +109,64 @@ export class PostController {
                 message: "Get Posts Successfully",
                 data: {
                     posts: posts,
+                },
+            });
+        } catch (error) {
+            console.log("Get post error", error);
+
+            return res.status(500).json({
+                success: false,
+                message: "Terjadi kesalahan pada server",
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : error,
+            });
+        }
+    };
+
+
+     //melihat semua post yang sudah ada berdasarkan id
+    getPostById = async (req: Request, res: Response) => {
+        try {
+            const validatedParams = postIdSchema.parse(req.params);
+            const { id } = validatedParams;
+
+            const [post] = await db
+                .select({
+                    id: postsTable.id,
+                    categoriesId: categoriesTable.name, // nama kategori
+                    authorId: postsTable.authorId,
+                    title: postsTable.title,
+                    imageUrl: postsTable.imageUrl,
+                    imagePublicId: postsTable.imagePublicId,
+                    description: postsTable.description,
+                    status: postsTable.status,
+                    deletedAt: postsTable.deletedAt,
+                    updatedAt: postsTable.updatedAt,
+                    createdAt: postsTable.createdAt,
+                })
+                .from(postsTable)
+                .leftJoin(categoriesTable, eq(postsTable.categoriesId, categoriesTable.id))
+                .where(
+                    and(
+                        eq(postsTable.id, id),
+                        eq(postsTable.status, "published")
+                    )
+                );
+
+            if (!post) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Post Not Found",
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: "Post retrieved successfully",
+                data: {
+                    post: post,
                 },
             });
         } catch (error) {
